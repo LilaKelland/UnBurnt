@@ -36,6 +36,7 @@ def alert(deviceToken, body, title, sound):
 
 #Set up statemachine to handle cooking states:
 class tempStateMachine(StateMachine):
+  
     cold = State('Cold', initial=True)
     cooking = State('Cooking')
     burning = State('Burning')
