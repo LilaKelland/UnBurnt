@@ -18,17 +18,17 @@ import apns2
 
 l_device_token = "53363e77461b9c7d01851cb0a7e81676a3f4fb552e5b7e8381cb3ef16a3446b3"
 m_device_token = "a8de10202dbe14830fd08af9c8b447c8872fdbe320d03f5cf86c8e9805bf69b5"
-deviceToken = [l_device_token, m_device_token]
+device_token = [l_device_token, m_device_token]
 
-def alert(deviceToken, body, title, sound):
+def alert(device_token, body, title, sound):
   """to send to ios UnBurnt app"""
-  cli = apns2.APNSClient(mode="prod",client_cert="/Users/lilakelland/Documents/apns-prod.pem")
+  cli = apns2.APNSClient(mode="prod",client_cert="apns-prod.pem")
   alert = apns2.PayloadAlert(body= body, title= title)
   payload = apns2.Payload(alert=alert, sound = sound)
   n = apns2.Notification(payload=payload, priority=apns2.PRIORITY_LOW)
   for i in range (2):
-    response = cli.push(n=n, device_token = deviceToken[i], topic = 'com.lilakelland.tryAlamoFirePost')
-    print("yay ", i, deviceToken[i]) 
+    response = cli.push(n=n, device_token = device_token[i], topic = 'com.lilakelland.tryAlamoFirePost')
+    print("yay ", i, device_token[i]) 
   print(response.status_code)
   assert response.status_code == 200, response.reason
   assert response.apns_id
@@ -40,7 +40,7 @@ class tempStateMachine(StateMachine):
     burning = State('Burning')
 
     intialWarmUp = cold.to(cooking) #(when first time temp > lowtemp)
-    heatToBurn = cooking.to(burning) #(slope > isBurninf and temp > high temp)
+    heatToBurn = cooking.to(burning) #(slope > isBurning and temp > high temp)
     stopBurning = burning.to(cooking) #when temp < high temp add a too cold warning
     turnOff = cooking.to(cold) #when in cooking and temp too low for 5 min or more 
 
@@ -131,7 +131,7 @@ while True:
           title = "Now we're cooking - TIMER STARTED!"
           body = "It's {} F.".format(tempf)
           sound = 'chime'
-          alert(deviceToken, body, title, sound)
+          alert(device_token, body, title, sound)
           
           start = time.time()
           timerstart = start
@@ -151,7 +151,7 @@ while True:
             title = "{} Minute Checkpoint".format(timeMinute)
             body = "How's it looking? Timer resetting."
             sound = 'chime'
-            alert(deviceToken, body, title, sound)
+            alert(device_token, body, title, sound)
 
         temp = requests.get("http://192.168.7.82/")
         tempf = float(temp.json()["tempf"])
@@ -208,7 +208,7 @@ while True:
                 title = "On FIRE!"
                 body = "It's {} F.".format(tempf)
                 sound = 'chime'
-                alert(deviceToken, body, title, sound)
+                alert(device_token, body, title, sound)
               
                 tempState.heatToBurn() # To 'burning' state (no more alerts til cooled back to cooking)
             
@@ -221,7 +221,7 @@ while True:
                   title = "Too HOT!"
                   body = "It's {} F.".format(tempf)
                   sound = 'chime'
-                  alert(deviceToken, body, title, sound)
+                  alert(device_token, body, title, sound)
 
           # Too cold?
           # Will shut down (back to cold state) automatically if too cold for more than 200 seconds
@@ -237,13 +237,13 @@ while True:
                     title = "Turn UP the BBQ!"
                     body = "Cooled down to {} F.".format(tempf)
                     sound = 'chime'
-                    alert(deviceToken, body, title, sound)
+                    alert(device_token, body, title, sound)
 
                 elif (end - shutDownTimer >= 200):
                     title = "Enjoy your food!"
                     body = "Shutting down."
                     sound = 'chime'
-                    alert(deviceToken, body, title, sound)
+                    alert(device_token, body, title, sound)
                     
                     tempState.turnOff() # Back to cold state
 
@@ -252,7 +252,7 @@ while True:
                     title = "Turn UP the BBQ!"
                     body = "Cooled down to {} F.".format(tempf)
                     sound = 'chime'
-                    alert(deviceToken, body, title, sound)
+                    alert(device_token, body, title, sound)
               
       #Burning State:
         if (tempState.current_state == tempState.burning):

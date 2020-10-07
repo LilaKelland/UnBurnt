@@ -1,0 +1,7 @@
+apns2_client==0.5.4
+requests==2.23.0
+bottle==0.12.18
+numpy==1.19.1
+python_statemachine==0.8.0
+#apns2==0.7.1
+statemachine==0.1
