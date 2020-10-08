@@ -11,6 +11,10 @@ WORKDIR /app
 ADD . /app
 
 # execute everyone's favorite pip command, pip install -r
+RUN apt-get update
+RUN apt-get install -y gcc g++
+RUN python -m pip install --upgrade pip
+RUN pip install --upgrade pip setuptools wheel
 RUN pip install --trusted-host pypi.python.org -r requirements.txt
 RUN chmod a+x run.sh
 
