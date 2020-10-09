@@ -130,7 +130,7 @@ while True:
       if tempf > lowTemp:
           title = "Now we're cooking - TIMER STARTED!"
           body = "It's {} F.".format(tempf)
-          sound = 'chime'
+          sound = 'fire.aiff'
           alert(device_token, body, title, sound)
           
           start = time.time()
