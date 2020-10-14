@@ -19,6 +19,7 @@ import apns2
 l_device_token = "53363e77461b9c7d01851cb0a7e81676a3f4fb552e5b7e8381cb3ef16a3446b3"
 m_device_token = "a8de10202dbe14830fd08af9c8b447c8872fdbe320d03f5cf86c8e9805bf69b5"
 device_token = [l_device_token, m_device_token]
+url = 
 
 def alert(device_token, body, title, sound):
   """to send to ios UnBurnt app"""
@@ -167,7 +168,7 @@ while True:
           "tempOverTime" : tempOverTime,
           "timeElapse" : timeElapse
          }
-        with open("UnBurntChart.json", "w") as outfile: 
+        with open("unBurntChart.json", "w") as outfile: 
                 json.dump(tempOverTimeData, outfile)
         
         temptry = {
