@@ -122,7 +122,7 @@ while True:
             "tempOverTime" : tempOverTime,
             "timeElapse" : timeElapse
           }
-          with open("UnBurntChart.json", "w") as outfile: 
+          with open("unBurntChart.json", "w") as outfile: 
                   json.dump(tempOverTimeData, outfile)
 
       except RequestException:
