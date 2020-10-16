@@ -8,6 +8,7 @@ import datetime
 from requests.exceptions import RequestException
 import numpy
 import apns2
+import math
 
 # reads ardunio data writen to unburnttemp.json - temp and time data for ios app via unBurntAPI.py, 
 #   unburntstate.json - cooking state for ios app via unBurntAPI.py
@@ -19,7 +20,7 @@ import apns2
 l_device_token = "53363e77461b9c7d01851cb0a7e81676a3f4fb552e5b7e8381cb3ef16a3446b3"
 m_device_token = "a8de10202dbe14830fd08af9c8b447c8872fdbe320d03f5cf86c8e9805bf69b5"
 device_token = [l_device_token, m_device_token]
-url = 
+
 
 def alert(device_token, body, title, sound):
   """to send to ios UnBurnt app"""
@@ -102,28 +103,29 @@ while True:
           temp = requests.get("http://192.168.7.82/")
           tempf = float(temp.json()["tempf"])
 
-          temptry = {
-            "tempf": tempf,
-            "timeElapse": "Stopped (will start when over {} F)".format(lowTemp),
-            "checkTimer": "Stopped (will start when over {} F)".format(lowTemp),
-            "timeStamp": now.strftime("%A %I:%M %p")
-            }
-          with open("unburnttemp.json", "w") as outfile: 
-              json.dump(temptry, outfile)
+          if math.isnan(tempf) == False:
+            temptry = {
+              "tempf": tempf,
+              "timeElapse": "Stopped (will start when over {} F)".format(lowTemp),
+              "checkTimer": "Stopped (will start when over {} F)".format(lowTemp),
+              "timeStamp": now.strftime("%A %I:%M %p")
+              }
+            with open("unburnttemp.json", "w") as outfile: 
+                json.dump(temptry, outfile)
 
-          timeElapse = [] # list of time
-          tempOverTime = [] # list of temperatures
-          tempCount = 0
-          
-          tempOverTimeData = {
-            "lowTempLimit": lowTemp,
-            "highTempLimit": highTemp,
-            "tempCount": tempCount,
-            "tempOverTime" : tempOverTime,
-            "timeElapse" : timeElapse
-          }
-          with open("unBurntChart.json", "w") as outfile: 
-                  json.dump(tempOverTimeData, outfile)
+            timeElapse = [] # list of time
+            tempOverTime = [] # list of temperatures
+            tempCount = 0
+            
+            tempOverTimeData = {
+              "lowTempLimit": lowTemp,
+              "highTempLimit": highTemp,
+              "tempCount": tempCount,
+              "tempOverTime" : tempOverTime,
+              "timeElapse" : timeElapse
+            }
+            with open("unBurntChart.json", "w") as outfile: 
+                    json.dump(tempOverTimeData, outfile)
 
       except RequestException:
           print("Still cold - something is up with the ardunio connnection")
@@ -131,7 +133,7 @@ while True:
       if tempf > lowTemp:
           title = "Now we're cooking - TIMER STARTED!"
           body = "It's {} F.".format(tempf)
-          sound = 'fire.aiff'
+          sound = 'chime'
           alert(device_token, body, title, sound)
           
           start = time.time()
@@ -151,7 +153,7 @@ while True:
             #print(timeMinute)
             title = "{} Minute Checkpoint".format(timeMinute)
             body = "How's it looking? Timer resetting."
-            sound = 'chime'
+            sound = 'radar_timer.aif'
             alert(device_token, body, title, sound)
 
         temp = requests.get("http://192.168.7.82/")
@@ -208,7 +210,7 @@ while True:
             if (slope > 4) and (tempf > highTemp):
                 title = "On FIRE!"
                 body = "It's {} F.".format(tempf)
-                sound = 'chime'
+                sound = 'fire.aiff'
                 alert(device_token, body, title, sound)
               
                 tempState.heatToBurn() # To 'burning' state (no more alerts til cooled back to cooking)
@@ -221,7 +223,7 @@ while True:
                   isHot = True
                   title = "Too HOT!"
                   body = "It's {} F.".format(tempf)
-                  sound = 'chime'
+                  sound = 'too_hot.aif'
                   alert(device_token, body, title, sound)
 
           # Too cold?
@@ -237,7 +239,7 @@ while True:
                   #Alert user that BBQ too cold  
                     title = "Turn UP the BBQ!"
                     body = "Cooled down to {} F.".format(tempf)
-                    sound = 'chime'
+                    sound = 'too_cold.aif'
                     alert(device_token, body, title, sound)
 
                 elif (end - shutDownTimer >= 200):
@@ -252,7 +254,7 @@ while True:
                     tooColdTimer = time.time()
                     title = "Turn UP the BBQ!"
                     body = "Cooled down to {} F.".format(tempf)
-                    sound = 'chime'
+                    sound = 'too_cold.aif'
                     alert(device_token, body, title, sound)
               
       #Burning State:
@@ -269,13 +271,8 @@ while True:
       print("network error with sensor")
       print(timeElapse) #date time instead
 
-
- #change sound for for timer
- #bbq slam for checkpoints
- #Fire for on fire
-  #TODO - change alert sounds
   #TODO - have timer async run on ios and re adjust when checked 
-  #TODO - change to proper python form
+  #TODO - change to proper python format
  
  
   
