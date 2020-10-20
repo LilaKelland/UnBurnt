@@ -1,3 +1,10 @@
+"""UnBurnt.py
+reads ardunio data writen to unburnttemp.json - temp and time data for ios app via unBurntAPI.py, 
+#   unburntstate.json - cooking state for ios app via unBurntAPI.py
+# Reads initial cooking parameters written by ios via unBurntAPI.py - unburntconfig.json
+# Sends push notifications for check times and too hot/ too cold/ on fire through apns2 to 
+# predetermined (with device tokens specified) phones"""
+
 import time
 import requests
 from statemachine import StateMachine, State
@@ -10,46 +17,38 @@ import numpy
 import apns2
 import math
 
-# reads ardunio data writen to unburnttemp.json - temp and time data for ios app via unBurntAPI.py, 
-#   unburntstate.json - cooking state for ios app via unBurntAPI.py
-# Reads initial cooking parameters written by ios via unBurntAPI.py - unburntconfig.json
-# Sends push notifications for check times and too hot/ too cold/ on fire through apns2 to 
-# predetermined (with device tokens specified) phones
-
-
 l_device_token = "53363e77461b9c7d01851cb0a7e81676a3f4fb552e5b7e8381cb3ef16a3446b3"
 m_device_token = "a8de10202dbe14830fd08af9c8b447c8872fdbe320d03f5cf86c8e9805bf69b5"
 device_token = [l_device_token, m_device_token]
 
-
 def alert(device_token, body, title, sound):
-  """to send to ios UnBurnt app"""
+  """send alert to ios UnBurnt app"""
   cli = apns2.APNSClient(mode="prod",client_cert="apns-prod.pem")
-  alert = apns2.PayloadAlert(body= body, title= title)
-  payload = apns2.Payload(alert=alert, sound = sound)
-  n = apns2.Notification(payload=payload, priority=apns2.PRIORITY_LOW)
+  alert = apns2.PayloadAlert(body = body, title = title)
+  payload = apns2.Payload(alert = alert, sound = sound)
+  n = apns2.Notification(payload = payload, priority = apns2.PRIORITY_LOW)
   for i in range (2):
-    response = cli.push(n=n, device_token = device_token[i], topic = 'com.lilakelland.tryAlamoFirePost')
+    response = cli.push(n = n, device_token = device_token[i], topic = 'com.lilakelland.tryAlamoFirePost')
     print("yay ", i, device_token[i]) 
   print(response.status_code)
   assert response.status_code == 200, response.reason
   assert response.apns_id
  
-class tempStateMachine(StateMachine):
+class temp_state_machine(StateMachine):
     """Set up statemachine to handle cooking states"""
     cold = State('Cold', initial=True)
     cooking = State('Cooking')
     burning = State('Burning')
 
-    intialWarmUp = cold.to(cooking) #(when first time temp > lowtemp)
-    heatToBurn = cooking.to(burning) #(slope > isBurning and temp > high temp)
-    stopBurning = burning.to(cooking) #when temp < high temp add a too cold warning
-    turnOff = cooking.to(cold) #when in cooking and temp too low for 5 min or more 
+    intial_warm_up = cold.to(cooking) #(when first time temp > low_temp)
+    heat_to_burn = cooking.to(burning) #(slope > isBurning and tempf > high temp)
+    stop_burning = burning.to(cooking) #when temp < high temp add a too cold warning
+    turn_off = cooking.to(cold) #when in cooking and temp too low for 5 min or more 
 
-tempState = tempStateMachine()
+temp_state = temp_state_machine()
 
-def slope_intercept(x1,y1,x2,y2):
-    #Determine temperature rate of change - indicative of burning?
+def temp_slope(x1,y1,x2,y2):
+    """Determine temperature rate of change - indicative of burning?"""
     try:
       slope = (y2 - y1) / (x2 - x1)   
       return (slope)
@@ -63,74 +62,81 @@ def is_float(val):
         return(False)
     return(True)
 
-def setCookingParameters():
-    """Set by ios app - "tryAlamoFirePost" via UnBurntAPI.py" - reads from unburntconfig json file"""
+def set_cooking_parameters():
+    """Read in and set parameters (unburntconfig.json) set by ios app in  - "tryAlamoFirePost" via UnBurntAPI.py" """
     with open('unburntconfig.json', 'r') as openfile: 
-        configData = json.load(openfile)
+        config_data = json.load(openfile)
     #Initial case data set:     
-    lowTemp = 70
-    highTemp = 100
-    checkTime = 30000
+    low_temp = 70
+    high_temp = 100
+    check_time = 30000
     
-    if (is_float(configData["lowTemp"])): 
-        lowTemp = float(configData["lowTemp"])
-    if (is_float(configData["highTemp"])):  
-        highTemp = float(configData["highTemp"])
-    if (is_float(configData["lowTemp"])): 
-        checkTime = float(configData["checkTime"])
-    return(lowTemp, highTemp, checkTime)
+    if (is_float(config_data["lowTemp"])): 
+        low_temp = float(config_data["lowTemp"])
+    if (is_float(config_data["highTemp"])):  
+        high_temp = float(config_data["highTemp"])
+    if (is_float(config_data["checkTime"])): 
+        check_time = float(config_data["checkTime"])
+    return(low_temp, high_temp, check_time)
 
 #Initialize golbal variables
-tempOverTime = []
-timeElapse = [] 
-isHot = False
+temp_over_time = []
+time_elapse = [] 
+is_too_hot = False
 
 while True:
-  (lowTemp, highTemp, checkTime) = setCookingParameters()
+  (low_temp, high_temp, check_time) = set_cooking_parameters()
   end = time.time()
   now = datetime.datetime.now()
 
 #Cold to warming up initial state:
-  if (tempState.current_state == tempState.cold):
-      tooColdCount = 0
-      stateStatus = {
+  if (temp_state.current_state == temp_state.cold):
+      #tooColdCount = 0
+      state_status = {
           "state": "cold"
           }
       with open("unburntstate.json", "w") as outfile: 
-          json.dump(stateStatus, outfile)
+          json.dump(state_status, outfile)
       
       try: 
           temp = requests.get("http://192.168.7.82/")
           tempf = float(temp.json()["tempf"])
+          tempf2 = float(temp.json()["tempf2"])
+          print(tempf)
+          print(tempf2)
+          flame_value = float(temp.json()["flameValue"])
+          print(flame_value)
 
           if math.isnan(tempf) == False:
             temptry = {
               "tempf": tempf,
-              "timeElapse": "Stopped (will start when over {} F)".format(lowTemp),
-              "checkTimer": "Stopped (will start when over {} F)".format(lowTemp),
+              "tempf2": tempf2,
+              "flameValue": flame_value,
+              "timeElapse": "Stopped (will start when over {} F)".format(low_temp),
+              "checkTimer": "Stopped (will start when over {} F)".format(low_temp),
               "timeStamp": now.strftime("%A %I:%M %p")
               }
             with open("unburnttemp.json", "w") as outfile: 
                 json.dump(temptry, outfile)
 
-            timeElapse = [] # list of time
-            tempOverTime = [] # list of temperatures
-            tempCount = 0
+            time_elapse = [] # list of time
+            temp_over_time = [] # list of temperatures
+            temp_count = 0
             
-            tempOverTimeData = {
-              "lowTempLimit": lowTemp,
-              "highTempLimit": highTemp,
-              "tempCount": tempCount,
-              "tempOverTime" : tempOverTime,
-              "timeElapse" : timeElapse
+            temp_over_time_data = {
+              "lowTempLimit": low_temp,
+              "highTempLimit": high_temp,
+              "tempCount": temp_count,
+              "tempOverTime" : temp_over_time,
+              "timeElapse" : time_elapse
             }
             with open("unBurntChart.json", "w") as outfile: 
-                    json.dump(tempOverTimeData, outfile)
+                    json.dump(temp_over_time_data, outfile)
 
       except RequestException:
           print("Still cold - something is up with the ardunio connnection")
     
-      if tempf > lowTemp:
+      if tempf > low_temp:
           title = "Now we're cooking - TIMER STARTED!"
           body = "It's {} F.".format(tempf)
           sound = 'chime'
@@ -139,13 +145,13 @@ while True:
           start = time.time()
           timerstart = start
         
-          tempState.intialWarmUp()
+          temp_state.intial_warm_up()
 
-  elif (tempState.current_state != tempState.cold):  
+  elif (temp_state.current_state != temp_state.cold):  
     try:
       #Check BBQ Timer to see if entering cool down phase
-        if ((end - timerstart) >= checkTime):
-            timeMinute = round(checkTime/60,2)
+        if ((end - timerstart) >= check_time):
+            timeMinute = round(check_time/60,2)
             print("end - timerstart ", end - timerstart)
             print("end- start (total time) ", end-start)
             timerstart = time.time()
@@ -159,68 +165,68 @@ while True:
         temp = requests.get("http://192.168.7.82/")
         tempf = float(temp.json()["tempf"])
 
-        timeElapse.append(end - start) # list of time
-        tempOverTime.append(tempf) # list of temperatures
-        tempCount = len(tempOverTime)
+        time_elapse.append(end - start) # list of time
+        temp_over_time.append(tempf) # list of temperatures
+        temp_count = len(temp_over_time)
         
-        tempOverTimeData = {
-          "lowTempLimit": lowTemp,
-          "highTempLimit": highTemp,
-          "tempCount": tempCount,
-          "tempOverTime" : tempOverTime,
-          "timeElapse" : timeElapse
+        temp_over_time_data = {
+          "low_tempLimit": low_temp,
+          "high_tempLimit": high_temp,
+          "tempCount": temp_count,
+          "tempOverTime" : temp_over_time,
+          "timeElapse" : time_elapse
          }
         with open("unBurntChart.json", "w") as outfile: 
-                json.dump(tempOverTimeData, outfile)
+                json.dump(temp_over_time_data, outfile)
         
         temptry = {
               "tempf": tempf,
-              "timeElapse": strftime("%M:%S", gmtime(timeElapse[-1])),
-              "checkTimer": strftime("%M:%S", gmtime(checkTime - (end - timerstart))),
+              "timeElapse": strftime("%M:%S", gmtime(time_elapse[-1])),
+              "checkTimer": strftime("%M:%S", gmtime(check_time - (end - timerstart))),
               "timeStamp": now.strftime("%A %H:%M:%S")
               }
         with open("unburnttemp.json", "w") as outfile: 
               json.dump(temptry, outfile)
           
       #Cooking State:
-        if tempState.current_state == tempState.cooking:
+        if temp_state.current_state == temp_state.cooking:
             #Update unburntstate.json state to "cooking" 
-            stateStatus = {
+            state_status = {
                 "state": "cooking"
                 }
             with open("unburntstate.json", "w") as outfile: 
-              json.dump(stateStatus, outfile)
+              json.dump(state_status, outfile)
 
-           #Determine if temperature is in the cooking range isHot 
-            if tempf < highTemp:
-              isHot = False
+           #Determine if temperature is in the cooking range is_too_hot 
+            if tempf < high_temp:
+              is_too_hot = False
 
-            if tempf > lowTemp:
-              isCold = False
-              #shutDownTimer = time.time()
+            if tempf > low_temp:
+              is_too_cold = False
+              #shut_down_timer = time.time()
            
             try:
               #Is burning?  Check temperature slope to determine:
-              slope = slope_intercept(timeElapse[-2],tempOverTime[-2],timeElapse[-1],tempOverTime[-1])
-              print(slope)
+              slope = temp_slope(time_elapse[-2],temp_over_time[-2],time_elapse[-1],temp_over_time[-1])
+              #print(slope)
             except(IndexError):
               slope = 1
             
           # On fire?
-            if (slope > 4) and (tempf > highTemp):
+            if (slope > 4) and (tempf > high_temp):
                 title = "On FIRE!"
                 body = "It's {} F.".format(tempf)
                 sound = 'fire.aiff'
                 alert(device_token, body, title, sound)
               
-                tempState.heatToBurn() # To 'burning' state (no more alerts til cooled back to cooking)
+                temp_state.heat_to_burn() # To 'burning' state (no more alerts til cooled back to cooking)
             
           # Too hot?
-            if tempf > highTemp:
-                if (isHot == False) or (end - tooHotTimer >= 30):
-                  tooHotTimer = time.time()
-                  shutDownTimer = time.time()
-                  isHot = True
+            if tempf > high_temp:
+                if (is_too_hot == False) or (end - too_hot_timer >= 30):
+                  too_hot_timer = time.time()
+                  shut_down_timer = time.time()
+                  is_too_hot = True
                   title = "Too HOT!"
                   body = "It's {} F.".format(tempf)
                   sound = 'too_hot.aif'
@@ -229,12 +235,12 @@ while True:
           # Too cold?
           # Will shut down (back to cold state) automatically if too cold for more than 200 seconds
           # Will alert user every 60 seconds on its way to shutting down up til time is reached
-            elif tempf < lowTemp:
-                if (isCold == False):
+            elif tempf < low_temp:
+                if (is_too_cold == False):
                   #Then just dipped down into "too cold" - initialize timers:
-                    tooColdTimer = time.time()  # to calculate 60 sec warnings that BBQ too cold from
-                    shutDownTimer = time.time() # to calculate 200 sec to shut down from
-                    isCold = True
+                    too_cold_timer = time.time()  # to calculate 60 sec warnings that BBQ too cold from
+                    shut_down_timer = time.time() # to calculate 200 sec to shut down from
+                    is_too_cold = True
 
                   #Alert user that BBQ too cold  
                     title = "Turn UP the BBQ!"
@@ -242,37 +248,37 @@ while True:
                     sound = 'too_cold.aif'
                     alert(device_token, body, title, sound)
 
-                elif (end - shutDownTimer >= 200):
+                elif (end - shut_down_timer >= 200):
                     title = "Enjoy your food!"
                     body = "Shutting down."
                     sound = 'chime'
                     alert(device_token, body, title, sound)
                     
-                    tempState.turnOff() # Back to cold state
+                    temp_state.turn_off() # Back to cold state
 
-                elif (end - tooColdTimer) >= 60:
-                    tooColdTimer = time.time()
+                elif (end - too_cold_timer) >= 60:
+                    too_cold_timer = time.time()
                     title = "Turn UP the BBQ!"
                     body = "Cooled down to {} F.".format(tempf)
                     sound = 'too_cold.aif'
                     alert(device_token, body, title, sound)
               
       #Burning State:
-        if (tempState.current_state == tempState.burning):
-            stateStatus = {
+        if (temp_state.current_state == temp_state.burning):
+            state_status = {
               "state": "burning"
               }
             with open("unburntstate.json", "w") as outfile: 
-              json.dump(stateStatus, outfile)
-            if tempf < highTemp:
-                tempState.stopBurning() # Back to 'cooking' state 
+              json.dump(state_status, outfile)
+            if tempf < high_temp:
+                temp_state.stop_burning() # Back to 'cooking' state 
 
     except RequestException:
       print("network error with sensor")
-      print(timeElapse) #date time instead
+      print(time_elapse) #date time instead
 
   #TODO - have timer async run on ios and re adjust when checked 
-  #TODO - change to proper python format
+  
  
  
   
