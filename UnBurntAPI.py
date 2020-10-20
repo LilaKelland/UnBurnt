@@ -5,16 +5,10 @@
 # reads in config from ios app via from unburntconfig.json: highTemp, lowTemp, checkTime, fireAlert 
 # passes state from UnBurnt.py via unburntstate.json to ios app
 
-#TODO
-#ios app will then display current temp, current state, and swipe for graph and state over time with colour
-#ios app will have stop and start/restart buttonsp
-
 from bottle import Bottle, response, request
 import json
-import numpy as np
 
 app = Bottle()
-
 
 #Current temp, timer to check BBQ, total Cook time 
 @app.route('/getTempTime')
@@ -83,20 +77,25 @@ def setToken(token):
 #Retreives cooking parameters from ios
 @app.route('/cookingParameters')
 def getCookingParameters():
-    lowTemp = request.GET.get("lowTemp")
-    highTemp = request.GET.get("highTemp")
-    checkTime = request.GET.get("checkTime")
-    print(lowTemp, highTemp, checkTime)
-    cookingParameters = {
-        "lowTemp" : lowTemp,
-        "highTemp" : highTemp,
-        "checkTime" : checkTime
-        }
-  
-    with open("unburntconfig.json", "w") as outfile: 
-        json.dump(cookingParameters, outfile) 
+    try:
+        lowTemp = request.GET.get("lowTemp")
+        highTemp = request.GET.get("highTemp")
+        checkTime = request.GET.get("checkTime")
+        print(lowTemp, highTemp, checkTime)
+        cookingParameters = {
+            "lowTemp" : lowTemp,
+            "highTemp" : highTemp,
+            "checkTime" : checkTime
+            }
+    
+        with open("unburntconfig.json", "w") as outfile: 
+            json.dump(cookingParameters, outfile) 
 
-    return("success")
+        return("success")
+        
+    except:
+        return("didn't work")
+    
 
 #Retreives cooking parameters from unburntconfig.json for defaults
 @app.route('/getDefaultConfig')

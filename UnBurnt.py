@@ -108,7 +108,7 @@ while True:
           print(flame_value)
 
           if math.isnan(tempf) == False:
-            temptry = {
+            ardunio_data = {
               "tempf": tempf,
               "tempf2": tempf2,
               "flameValue": flame_value,
@@ -117,7 +117,7 @@ while True:
               "timeStamp": now.strftime("%A %I:%M %p")
               }
             with open("unburnttemp.json", "w") as outfile: 
-                json.dump(temptry, outfile)
+                json.dump(ardunio_data, outfile)
 
             time_elapse = [] # list of time
             temp_over_time = [] # list of temperatures
@@ -151,16 +151,12 @@ while True:
     try:
       #Check BBQ Timer to see if entering cool down phase
         if ((end - timerstart) >= check_time):
-            timeMinute = round(check_time/60,2)
+            time_minute = round(check_time/60,2)
             print("end - timerstart ", end - timerstart)
-            print("end- start (total time) ", end-start)
+            print("end - start (total time) ", end-start)
             timerstart = time.time()
             print("end - timerstart ", end - timerstart)
-            #print(timeMinute)
-            title = "{} Minute Checkpoint".format(timeMinute)
-            body = "How's it looking? Timer resetting."
-            sound = 'radar_timer.aif'
-            alert(device_token, body, title, sound)
+            alert(device_token, body = "How's it looking? Timer resetting.", title = "{} Minute Checkpoint".format(time_minute), sound = 'radar_timer.aif')
 
         temp = requests.get("http://192.168.7.82/")
         tempf = float(temp.json()["tempf"])
@@ -170,8 +166,8 @@ while True:
         temp_count = len(temp_over_time)
         
         temp_over_time_data = {
-          "low_tempLimit": low_temp,
-          "high_tempLimit": high_temp,
+          "lowTempLimit": low_temp,
+          "highTempLimit": high_temp,
           "tempCount": temp_count,
           "tempOverTime" : temp_over_time,
           "timeElapse" : time_elapse
@@ -208,17 +204,12 @@ while True:
             try:
               #Is burning?  Check temperature slope to determine:
               slope = temp_slope(time_elapse[-2],temp_over_time[-2],time_elapse[-1],temp_over_time[-1])
-              #print(slope)
             except(IndexError):
               slope = 1
             
           # On fire?
             if (slope > 4) and (tempf > high_temp):
-                title = "On FIRE!"
-                body = "It's {} F.".format(tempf)
-                sound = 'fire.aiff'
-                alert(device_token, body, title, sound)
-              
+                alert(device_token, body = "It's {} F.".format(tempf), title = "On FIRE!", sound = 'fire.aiff')
                 temp_state.heat_to_burn() # To 'burning' state (no more alerts til cooled back to cooking)
             
           # Too hot?
@@ -226,11 +217,8 @@ while True:
                 if (is_too_hot == False) or (end - too_hot_timer >= 30):
                   too_hot_timer = time.time()
                   shut_down_timer = time.time()
-                  is_too_hot = True
-                  title = "Too HOT!"
-                  body = "It's {} F.".format(tempf)
-                  sound = 'too_hot.aif'
-                  alert(device_token, body, title, sound)
+                  is_too_hot = True 
+                  alert(device_token, body = "It's {} F.".format(tempf), title = "Too HOT!", sound = 'too_hot.aif')
 
           # Too cold?
           # Will shut down (back to cold state) automatically if too cold for more than 200 seconds
@@ -241,27 +229,16 @@ while True:
                     too_cold_timer = time.time()  # to calculate 60 sec warnings that BBQ too cold from
                     shut_down_timer = time.time() # to calculate 200 sec to shut down from
                     is_too_cold = True
-
                   #Alert user that BBQ too cold  
-                    title = "Turn UP the BBQ!"
-                    body = "Cooled down to {} F.".format(tempf)
-                    sound = 'too_cold.aif'
-                    alert(device_token, body, title, sound)
+                    alert(device_token, body = "Cooled down to {} F.".format(tempf), title = "Turn UP the BBQ!", sound = 'too_cold.aif')
 
                 elif (end - shut_down_timer >= 200):
-                    title = "Enjoy your food!"
-                    body = "Shutting down."
-                    sound = 'chime'
-                    alert(device_token, body, title, sound)
-                    
+                    alert(device_token, body = "Shutting down.", title = "Enjoy your food!", sound = 'chime')
                     temp_state.turn_off() # Back to cold state
 
                 elif (end - too_cold_timer) >= 60:
                     too_cold_timer = time.time()
-                    title = "Turn UP the BBQ!"
-                    body = "Cooled down to {} F.".format(tempf)
-                    sound = 'too_cold.aif'
-                    alert(device_token, body, title, sound)
+                    alert(device_token, body = "Cooled down to {} F.".format(tempf), title = "Turn UP the BBQ!", sound = 'too_cold.aif')
               
       #Burning State:
         if (temp_state.current_state == temp_state.burning):
