@@ -1,9 +1,10 @@
 # UnBurntAPI.py
 # July 2020
 
-# passes current temp and times from  (and ardunio) via unburnttempp.json 
+# passes current temp and times from ardunio via unBurnt.py to ios through unburnttempp.json 
 # reads in config from ios app via from unburntconfig.json: highTemp, lowTemp, checkTime 
 # passes state from UnBurnt.py via unburntstate.json to ios app
+# grabs tokens for APNS push notifications when initally set
 
 from bottle import Bottle, response, request
 import json
@@ -26,8 +27,9 @@ def getTempTime():
         "is_tempf2_valid" : tempData["is_tempf2_valid"],
         "flameValue": tempData["flameValue"],
         "is_flame_valid" : tempData["is_flame_valid"],
-        "timeElapse" : str(tempData["timeElapse"]),
-        "checkTimer" : str(tempData["checkTimer"]),
+        "timeElapsed" : tempData["timeElapsed"],
+        "checkTimer" : tempData["checkTimer"],
+        "timeNow" : tempData["timeNow"],
         "timeStamp" : str(tempData["timeStamp"])
         }
 
@@ -51,7 +53,7 @@ def getState():
 
 @app.route('/getTempTimeArray')
 def getTempTimeArray():
-    """ Temperature and time lists for the chart view"""
+    """Temperature and time lists for the chart view"""
 
     with open('unBurntChart.json', 'r') as openfile: 
         TempTimeData = json.load(openfile) 
@@ -60,7 +62,7 @@ def getTempTimeArray():
         "highTempLimit": TempTimeData["highTempLimit"],
         "lowTempLimit": TempTimeData["lowTempLimit"],
         "tempCount": TempTimeData["tempCount"],
-        "tempArray": TempTimeData["tempOverTime"],
+        "tempArray": TempTimeData["tempOverTime1"],
         "tempArray2": TempTimeData["tempOverTime2"],
         "timeArray": TempTimeData["timeElapse"]
         }
@@ -130,7 +132,7 @@ def getIsBurning():
 
 @app.route('/getDefaultConfig')
 def getDefaultConfig():
-    """#Retreives cooking parameters from unburnt_config.json for defaults"""
+    """#Retreives cooking parameters from unburntconfig.json for defaults"""
 
     with open("unburntconfig.json", 'r') as openfile: 
             configData = json.load(openfile) 
@@ -139,5 +141,5 @@ def getDefaultConfig():
 
     
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=8080, debug=True, reloader=True)
+    app.run(host='192.168.7.45', port=8080, debug=True, reloader=True)
     #app.run(host='192.168.7.87',debug=True)
