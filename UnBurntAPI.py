@@ -1,9 +1,9 @@
 # UnBurntAPI.py
 # July 2020
 
-# passes current temp and times from ardunio via unBurnt.py to ios through unburnttempp.json 
-# reads in config from ios app via from unburntconfig.json: highTemp, lowTemp, checkTime 
-# passes state from UnBurnt.py via unburntstate.json to ios app
+# passes current temp and times from ardunio via unBurnt.py to ios through unBurntTempp.json 
+# reads in config from ios app via from unBurntConfig.json: highTemp, lowTemp, checkTime 
+# passes state from UnBurnt.py via unBurntState.json to ios app
 # grabs tokens for APNS push notifications when initally set
 
 from bottle import Bottle, response, request
@@ -11,12 +11,11 @@ import json
 
 app = Bottle()
 
-
 @app.route('/getTempTime')
 def getTempTime():
     """Current temps, time/date, time left to check BBQ, total cook time for ios"""
    
-    with open('unburnttemp.json', 'r') as openfile: 
+    with open('unBurntTemp.json', 'r') as openfile: 
         tempData = json.load(openfile) 
         print(tempData)
 
@@ -40,7 +39,7 @@ def getTempTime():
 def getState():
     """Reads cooking state"""
    
-    with open('unburntstate.json', 'r') as openfile: 
+    with open('unBurntState.json', 'r') as openfile: 
         stateData = json.load(openfile) 
         print(stateData)
 
@@ -101,7 +100,7 @@ def getCookingParameters():
             "checkTime" : checkTime
             }
     
-        with open("unburntconfig.json", "w") as outfile: 
+        with open("unBurntConfig.json", "w") as outfile: 
             json.dump(cookingParameters, outfile) 
 
         return("success")
@@ -132,9 +131,9 @@ def getIsBurning():
 
 @app.route('/getDefaultConfig')
 def getDefaultConfig():
-    """#Retreives cooking parameters from unburntconfig.json for defaults"""
+    """#Retreives cooking parameters from unBurntConfig.json for defaults"""
 
-    with open("unburntconfig.json", 'r') as openfile: 
+    with open("unBurntConfig.json", 'r') as openfile: 
             configData = json.load(openfile) 
 
     return(json.dumps(configData))

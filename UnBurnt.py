@@ -4,8 +4,8 @@ determines cooking state and sends push notifications (alerts) via APNS to ios a
 (currently only with predetermined (with device tokens specified) phones)
 
 writes data:
-temp and sensor validity unburnttemp.json 
-cooking state - unburntstate.json
+temp and sensor validity unBurntTemp.json 
+cooking state - unBurntState.json
 chart data - unBurntChart.json
 
 reads data:
@@ -176,7 +176,7 @@ def is_float(val):
 
 def set_cooking_parameters():
     """Read in cooking limits as set by ios app in  - "tryAlamoFirePost" """
-    with open('unburntconfig.json', 'r') as openfile: 
+    with open('unBurntConfig.json', 'r') as openfile: 
         config_data = json.load(openfile)
     #Initial case data set:     
     low_temp = 70
@@ -211,7 +211,7 @@ while True:
         state_status = {
             "state": "cold"
             }
-        with open("unburntstate.json", "w") as outfile: 
+        with open("unBurntState.json", "w") as outfile: 
             json.dump(state_status, outfile)
         
        # try: 
@@ -235,7 +235,7 @@ while True:
             "timeNow": this_time,  #TODO -- use to compare to "now" in ios app to kill ios timer if not up to date (there's probably a better way to do this)
             "timeStamp": now.strftime("%A %I:%M %p")
             }
-        with open("unburnttemp.json", "w") as outfile: 
+        with open("unBurntTemp.json", "w") as outfile: 
             json.dump(sensor_data, outfile)
 
     #reset/ initialize chart data
@@ -269,7 +269,7 @@ while True:
             state_status = {
                 "state": "cooking"
                 }
-            with open("unburntstate.json", "w") as outfile: 
+            with open("unBurntState.json", "w") as outfile: 
                 json.dump(state_status, outfile)
             temp_state.intial_warm_up()
           
@@ -305,7 +305,7 @@ while True:
                 "timeNow": this_time, #  TODO -- use to compare to "now" in ios app to kill timers if not up to date (in case of flaky server/ sensors -there's probably a better way to do this)
                 "timeStamp": now.strftime("%A %I:%M %p") 
                 }
-            with open("unburnttemp.json", "w") as outfile: 
+            with open("unBurntTemp.json", "w") as outfile: 
                 json.dump(dashboard_display_data, outfile)
 
             if (is_tempf2_valid == False) and (is_tempf1_valid == False):
@@ -379,7 +379,7 @@ while True:
                         state_status = {
                             "state": "burning"
                             }
-                        with open("unburntstate.json", "w") as outfile: 
+                        with open("unBurntState.json", "w") as outfile: 
                             json.dump(state_status, outfile)
                         
                         temp_state.heat_to_burn() # To 'burning' state (no more alerts til cooled back to cooking)
@@ -391,7 +391,7 @@ while True:
                     state_status = {
                         "state": "cooking"
                         }
-                    with open("unburntstate.json", "w") as outfile: 
+                    with open("unBurntState.json", "w") as outfile: 
                         json.dump(state_status, outfile)
                     
                     temp_state.stop_burning() # Back to 'cooking' state 
