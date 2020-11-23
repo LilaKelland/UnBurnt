@@ -29,7 +29,7 @@ import apns2
 import math
 
 #TODO --store this in a DB and associate with user id allow for varying number of device token 
-l_device_token = "53363e77461b9c7d01851cb0a7e81676a3f4fb552e5b7e8381cb3ef16a3446b3"
+l_device_token = "9561ac44226d58cde065af1800ab7baaddd986e26e8a8c0a50d003fed0205059"#"53363e77461b9c7d01851cb0a7e81676a3f4fb552e5b7e8381cb3ef16a3446b3"
 m_device_token = "a8de10202dbe14830fd08af9c8b447c8872fdbe320d03f5cf86c8e9805bf69b5"
 device_token = [l_device_token, m_device_token]
 
@@ -119,14 +119,10 @@ class BBQSensorSet():
 
     #def getTemps(self):
     def getLeftTemp(self): 
-        """Gets tempf1 and tempf2 and validates"""
+        """Gets tempf1 and validates"""
         temp1 = self.left_temp.get_value()
-        temp2 = self.right_temp.get_value()
-
         if (temp1 == 1 or temp1 == 32):
             is_tempf1_valid = False  # to deal with flakiness of sensors
-            #temp1 = temp2
-        
         #TODO --elif (temp1 < (temp2 + 200)) or (temp1 > (temp2 - 200)):
         #TODO --perhaps compare to previous values of itself? 
         else:
@@ -136,7 +132,6 @@ class BBQSensorSet():
 
     def getRightTemp(self): 
         """Gets tempf2 and validates"""
-        temp1 = self.left_temp.get_value()
         temp2 = self.right_temp.get_value()
         
         if (temp2 == 1 or temp2 == 32):
