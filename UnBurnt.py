@@ -37,10 +37,10 @@ def alert(device_token, body, title, sound, category):
   """send alert to ios UnBurnt app"""
   cli = apns2.APNSClient(mode = "prod",client_cert = "apns-prod.pem")
   alert = apns2.PayloadAlert(body = body, title = title)
-  payload = apns2.Payload(alert = alert, sound = sound, category = category)
+  payload = apns2.Payload(alert = alert, sound = sound, category = category, mutable_content = True)#, "action":action)
   n = apns2.Notification(payload = payload, priority = apns2.PRIORITY_LOW)
   for i in range (2):
-    response = cli.push(n = n, device_token = device_token[i], topic = 'com.lilakelland.tryAlamoFirePost')
+    response = cli.push(n = n, device_token = device_token[i], topic = 'com.lilakelland.UnBurnt')
     print("yay ", i, device_token[i]) 
   print(response.status_code)
   assert response.status_code == 200, response.reason
@@ -74,7 +74,7 @@ class Arduino:
         
         self.last_checked = time.time()
         try:
-            self.json = requests.get("http://192.168.7.82/", timeout = 5)
+            self.json = requests.get("http://192.168.0.36", timeout = 5)
         except Exception as e:
             self.json = ""
             raise e
@@ -156,7 +156,7 @@ class BBQSensorSet():
 
     def refresh(self):
         self.getLeftTemp()
-        self.getLeftTemp()
+        self.getRightTemp()
         self.getFlameValue()
 
 bbqSensorSet = BBQSensorSet(thermocouple_left, thermocouple_right, flame_sensor)

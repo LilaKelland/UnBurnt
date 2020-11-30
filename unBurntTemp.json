@@ -1,1 +1,1 @@
-{"tempf1": 1, "is_tempf1_valid": false, "tempf2": 0, "is_tempf2_valid": false, "flameValue": 1, "is_flame_valid": false, "timeElapsed": "0", "checkTimer": "-103", "timeNow": "1606484203.720556", "timeStamp": "Friday 08:36 AM"}
+{"tempf1": 38, "is_tempf1_valid": true, "tempf2": 41, "is_tempf2_valid": true, "flameValue": 1023, "is_flame_valid": true, "timeElapsed": "0", "checkTimer": "-6678", "timeNow": "1606752161.352847", "timeStamp": "Monday 11:02 AM"}
