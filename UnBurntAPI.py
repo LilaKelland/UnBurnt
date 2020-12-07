@@ -141,7 +141,6 @@ def getDefaultConfig():
     
 if __name__ == '__main__':
     app.run(host='192.168.0.19', port=8080, debug=True, reloader=True)
-    #app.run(host='192.168.7.45',debug=True)
     #server 192.168.0.35 - but set to 0.0.0.0
     #computer 192.168.0.19
 

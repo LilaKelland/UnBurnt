@@ -29,20 +29,20 @@ import apns2
 import math
 
 #TODO --store this in a DB and associate with user id allow for varying number of device token 
-l_device_token = "9561ac44226d58cde065af1800ab7baaddd986e26e8a8c0a50d003fed0205059"
-m_device_token = "a8de10202dbe14830fd08af9c8b447c8872fdbe320d03f5cf86c8e9805bf69b5"
+l_device_token = "2a76a367f104574d4f595d240d302a62e069fb144d96b7090392e5606f27da18"
+m_device_token = "0b8ac8dccb7297cf2ffd7b38d21da8ab652821f166e3cb8a3f4da760da4c9722"
 device_token = [l_device_token, m_device_token]
 
 def alert(device_token, body, title, sound, category):
   """send alert to ios UnBurnt app"""
-  cli = apns2.APNSClient(mode = "prod",client_cert = "apns-prod.pem")
+  cli = apns2.APNSClient(mode = "prod",client_cert = "apns-pro.pem")
   alert = apns2.PayloadAlert(body = body, title = title)
   payload = apns2.Payload(alert = alert, sound = sound, category = category, mutable_content = True)#, "action":action)
   n = apns2.Notification(payload = payload, priority = apns2.PRIORITY_LOW)
   for i in range (2):
     response = cli.push(n = n, device_token = device_token[i], topic = 'com.lilakelland.UnBurnt')
     print("yay ", i, device_token[i]) 
-  print(response.status_code)
+  print("resoponse status code", response.status_code)
   assert response.status_code == 200, response.reason
   assert response.apns_id
  
@@ -70,12 +70,15 @@ class Arduino:
   def requests_temp(self, check_it_now = False):
         time_since_checked = time.time() - self.last_checked
         if (time_since_checked < 3) and (check_it_now == False):
+          #print ("Not calling arduino yet since time_since is {0}".format(time_since_checked))
           return(self.json)
         
         self.last_checked = time.time()
         try:
-            self.json = requests.get("http://192.168.0.36", timeout = 5)
+            self.json = requests.get("http://192.168.0.36", timeout = 6)
+            print ("Trying to get from arduino and got {0}".format(self.json))
         except Exception as e:
+            print ("Getting from Arduino failed with {0}".format(e))
             self.json = ""
             raise e
         finally:
@@ -97,9 +100,11 @@ class BBQSensor:
                 temp = self.arduino.requests_temp(True)
                 self.value = float(temp.json()[self.value_name])
                 count += 1
+                print ("Arduino returned value |{0}| which is nan on count {1}".format(self.value, count))
             if math.isnan(self.value) == True:
                 self.value = 1 #TODO --decide what to do here with this 
-        except(Exception):#(RequestException, Timeout):
+        except Exception as e:#(RequestException, Timeout):
+                #print("Got exception {0}".format(e)) 
                 self.value = 1 #TODO --decide what to do here with this
     
         return(self.value)
@@ -197,10 +202,16 @@ def set_cooking_parameters():
     return(low_temp_limit, high_temp_limit, check_time_interval)
 
 def write_dashboard_display_data_to_file(bbqSensorSet, list_of_time = [0], check_time_interval = 0, timer_start_time = time.time()):
-    end_time = time.time()
+    if list_of_time == [0]:
+        end_time = 0
+        timer_start_time = 0
+    else:
+        end_time = time.time()
     now = datetime.datetime.now()
     #TODO handle the empty array case - special character?
     #TODO initialize the check time
+    #print("time since started", str(int(list_of_time[-1])))
+    #print("timer countdown", str(int(check_time_interval - (end_time - timer_start_time))))
     sensor_data = {
         "tempf1": int(bbqSensorSet.tempf1),
         "is_tempf1_valid" : bbqSensorSet.is_tempf1_valid,
@@ -210,9 +221,7 @@ def write_dashboard_display_data_to_file(bbqSensorSet, list_of_time = [0], check
         "is_flame_valid" : bbqSensorSet.is_flame_valid,
         "timeElapsed": str(int(list_of_time[-1])),
         "checkTimer": str(int(check_time_interval - (end_time - timer_start_time))),
-        #"timeElapsed": "Starts when over {}°F/ Sensor reconnected".format(low_temp_limit),
-        #"checkTimer": "Starts when over {}°F/ Sensor reconnected".format(low_temp_limit),
-        "timeNow": str(time.time()),  #TODO -- use to compare to "now" in ios app to kill ios timer if not up to date (there's probably a better way to do this)
+        "timeNow": int(time.time()),  
         "timeStamp": now.strftime("%A %I:%M %p")
         }
     with open("unBurntTemp.json", "w") as outfile: 
@@ -240,6 +249,7 @@ def write_chart_data_to_file(low_temp_limit, high_temp_limit, list_of_tempf1, li
 
 #Initialize variables
 list_of_time = [] 
+state_change_time = 0
 list_of_tempf1 = [] # list of temperatures
 list_of_tempf2 = [] # list of temperatures
 burning_slope = 4 #TODO - have system learn what indicates burning from user response (Notification Actions) /flame sensors/ temps
@@ -247,13 +257,13 @@ burning_slope = 4 #TODO - have system learn what indicates burning from user res
 while True:
     (low_temp_limit, high_temp_limit, check_time_interval) = set_cooking_parameters()
     check_min, check_sec = divmod(check_time_interval, 60)
-    end_time = time.time()
-
+    
 #for Cold state (during warm up to low_temp_limit, or shutdown)
     if (temp_state.current_state == temp_state.cold): 
+        end_time = 0
         write_state_to_file("cold") 
         bbqSensorSet.refresh()
-        print(bbqSensorSet.tempf1, bbqSensorSet.is_tempf1_valid, bbqSensorSet.tempf2, bbqSensorSet.is_tempf2_valid, bbqSensorSet.flame_value, bbqSensorSet.is_flame_valid)
+        #print(bbqSensorSet.tempf1, bbqSensorSet.is_tempf1_valid, bbqSensorSet.tempf2, bbqSensorSet.is_tempf2_valid, bbqSensorSet.flame_value, bbqSensorSet.is_flame_valid)
         write_dashboard_display_data_to_file(bbqSensorSet) #removed last 3 optionals
 
         #reset/ initialize chart data
@@ -270,6 +280,7 @@ while True:
             total_start_time = time.time()
             timer_start_time = total_start_time
             write_state_to_file("cooking")
+            state_change_time = time.time()
             temp_state.intial_warm_up()
           
 #for all states other than cold
@@ -281,14 +292,18 @@ while True:
                 alert(device_token, body = "How's it looking? Timer resetting.", title = f"{int(check_min)}:{int(check_sec)} Checkpoint", sound = 'radar_timer.aiff', category = "WAS_THERE_FIRE")
 
             #update temp/time lists
+            end_time = time.time()
             list_of_time.append(end_time - total_start_time)  
             list_of_tempf1.append(bbqSensorSet.tempf1) 
             list_of_tempf2.append(bbqSensorSet.tempf2) 
 
             #read sensors & update ios dashboard display data
             bbqSensorSet.refresh()
+            print (bbqSensorSet.tempf1, bbqSensorSet.tempf2)
             if (bbqSensorSet.is_tempf2_valid == False) and (bbqSensorSet.is_tempf1_valid == False):
                 print("temperature sensors offline, shutting down.")
+                # wait 10 seconds 
+                #then turn off
                 temp_state.turn_off() 
                 continue 
             write_dashboard_display_data_to_file(bbqSensorSet, list_of_time, check_time_interval, timer_start_time)
@@ -347,7 +362,7 @@ while True:
                     except(IndexError):
                         slopeR = 1
 
-                    if (slopeL > burning_slope or slopeR > burning_slope or (bbqSensorSet.flame_value < 1023 and bbqSensorSet.is_flame_valid == True)):
+                    if ((slopeL > burning_slope) or (slopeR > burning_slope) or (bbqSensorSet.flame_value < 1023 and bbqSensorSet.is_flame_valid == True)):
                         alert(device_token, body = "It's {}°F.".format(int(bbqSensorSet.tempf1)), title = "On FIRE!", sound = 'fire.aiff', category = "WAS_THERE_FIRE")
                         write_state_to_file("burning")
                         temp_state.heat_to_burn() 
@@ -361,7 +376,7 @@ while True:
 
         except RequestException:
           print("network error with sensor")
-          print(list_of_time) #date time instead
+          print("list of times ", list_of_time) #date time instead
 
       
     
