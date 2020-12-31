@@ -25,8 +25,21 @@ from time import strftime
 import datetime
 from requests.exceptions import RequestException, Timeout
 import numpy
+from scipy import stats
 import apns2
 import math
+
+#Initialize variables
+list_of_time = [] 
+state_change_time = 0
+list_of_tempf1 = [] # list of temperatures
+list_of_tempf2 = [] # list of temperatures
+BURNING_SLOPE = 4 #TODO - have system learn what indicates burning from user response (Notification Actions) /flame sensors/ temps
+too_cold_alert_timer = 0
+TOO_COLD_ALERT_INTERVAL = 60
+TOO_COLD_SHUT_DOWN_TIME = 200
+too_hot_alert_timer = 0
+TOO_HOT_ALERT_INTERVAL = 30
 
 #TODO --store this in a DB and associate with user id allow for varying number of device token 
 l_device_token = "2a76a367f104574d4f595d240d302a62e069fb144d96b7090392e5606f27da18"
@@ -34,28 +47,28 @@ m_device_token = "0b8ac8dccb7297cf2ffd7b38d21da8ab652821f166e3cb8a3f4da760da4c97
 device_token = [l_device_token, m_device_token]
 
 def alert(device_token, body, title, sound, category):
-  """send alert to ios UnBurnt app"""
-  cli = apns2.APNSClient(mode = "prod",client_cert = "apns-pro.pem")
-  alert = apns2.PayloadAlert(body = body, title = title)
-  payload = apns2.Payload(alert = alert, sound = sound, category = category, mutable_content = True)#, "action":action)
-  n = apns2.Notification(payload = payload, priority = apns2.PRIORITY_LOW)
-  for i in range (2):
-    response = cli.push(n = n, device_token = device_token[i], topic = 'com.lilakelland.UnBurnt')
-    print("yay ", i, device_token[i]) 
-  print("resoponse status code", response.status_code)
-  assert response.status_code == 200, response.reason
-  assert response.apns_id
+    """send alert to ios UnBurnt app"""
+    cli = apns2.APNSClient(mode = "prod",client_cert = "apns-pro.pem")
+    alert = apns2.PayloadAlert(body = body, title = title)
+    payload = apns2.Payload(alert = alert, sound = sound, category = category, mutable_content = True)#, "action":action)
+    n = apns2.Notification(payload = payload, priority = apns2.PRIORITY_LOW)
+    for i in range (2):
+        response = cli.push(n = n, device_token = device_token[i], topic = 'com.lilakelland.UnBurnt')
+        print("yay ", i, device_token[i]) 
+    print("resoponse status code", response.status_code)
+    assert response.status_code == 200, response.reason
+    assert response.apns_id
  
 class TempStateMachine(StateMachine):
     """Set up statemachine to handle cooking states"""
     cold_off = State('Cold', initial=True)
     cooking = State('Cooking')
-    cooking_too_hot = State("Cooking too hot")
-    cooking_too_cold = State("Cooking too cold")
+    cooking_too_hot = State("Cooking_too_hot")
+    cooking_too_cold = State("Cooking_too_cold")
     burning = State('Burning')
 
 #TODO - add in substates for cooking too hot and cooking too cold to make less confusing
-    intial_warm_up = cold_off.to(cooking) #(when first time temp > _limit)
+    start_cooking = cold_off.to(cooking) #(when first time temp > _limit)
     temp_dropped_too_cold = cooking.to(cooking_too_cold)
     warmed_back_up = cooking_too_cold.to(cooking)
     temp_too_hot = cooking.to(cooking_too_hot)
@@ -65,41 +78,82 @@ class TempStateMachine(StateMachine):
     stop_burning = burning.to(cooking) #when temp < high temp add a too cold warning
     cooled_down_to_turn_off = cooking_too_cold.to(cold_off)
     turn_off = cooking.to(cold_off) #when in cooking and temp too low for 200 sec or more or when both temp sensors invalid
+    turn_off_from_too_hot = cooking_too_hot.to(cold_off)
 
-    def on_intial_warm_up(self):
+#TODO add in state change time  to compare if just changed, leave, 
+    def on_start_cooking(self):
         print("warming up from cold to cooking")
-
+        alert(device_token, body = "Up to {}°F.".format(int(bbqSensorSet.tempf1)), title = "Now we're cooking - TIMER STARTED!", sound = "chime", category = "WAS_THERE_FIRE")
+        """total_start_time = time.time()
+        timer_start_time = total_start_time"""
+        write_state_to_file("cooking")
+        state_change_time = time.time()
+       
     def on_temp_dropped_too_cold(self):
         print("cooking to too cold")
+        too_cold_alert_timer = time.time()  
+        shut_down_timer = time.time() 
+        alert(device_token, body = "Cooled down to {}°F.".format(int(bbqSensorSet.tempf1)), title = "Turn UP the BBQ!", sound = 'too_cold.aiff', category = "WAS_THERE_FIRE")
+        write_state_to_file("cooking_too_cold")
+        state_change_time = time.time()
 
     def on_warmed_back_up(self):
         print("cooking_too_cold.to(cooking)")
+        write_state_to_file("cooking")
+        state_change_time = time.time()
 
     def on_temp_too_hot(self):
         print("cooking.to(cooking_too_hot)")
+        too_hot_alert_timer = time.time()
+        alert(device_token, body = "It's {}°F.".format(int(bbqSensorSet.tempf1)), title = "Too HOT!", sound = 'too_hot.aiff', category = "WAS_THERE_FIRE")
+        write_state_to_file("cooking_too_hot")
+        state_change_time = time.time()
 
     def on_too_hot_to_burn(self):
         print("too hot to burning")
+        alert(device_token, body = "It's {}°F.".format(int(bbqSensorSet.tempf1)), title = "On FIRE!", sound = 'fire.aiff', category = "WAS_THERE_FIRE")
+        write_state_to_file("burning")
+        state_change_time = time.time()
 
     def on_cooled_back_down_to_cooking(self):
         print("cooking_too_hot.to(cooking)")
+        write_state_to_file("cooking")
+        state_change_time = time.time()
 
     def on_heat_to_burn(self):
         print("cooking.to(burning)")
+        # check slope?
+        alert(device_token, body = "It's {}°F.".format(int(bbqSensorSet.tempf1)), title = "On FIRE!", sound = 'fire.aiff', category = "WAS_THERE_FIRE")
+        write_state_to_file("burning")
+        state_change_time = time.time()
 
     def on_stop_burning(self):
         print("burning.to(cooking)")
+        write_state_to_file("cooking")
+        state_change_time = time.time()
    
     def on_cooled_down_to_turn_off(self):
         print("cooking_too_cold.to(cold_off)")
+        alert(device_token, body = "Shutting down.", title = "Enjoy your food!", sound = 'chime', category = "WAS_THERE_FIRE")
+        write_state_to_file("cold_off")
+        state_change_time = time.time()
+
+    def on_turn_off_from_too_hot(self): 
+        print("cooking.to(cold_off)")
+        alert(device_token, body = "Shutting down.", title = "Lost connection with sensors.", sound = 'chime', category = "WAS_THERE_FIRE")
+        write_state_to_file("cold_off")
+        state_change_time = time.time()
 
     def on_turn_off(self):
         print("cooking.to(cold_off)")
+        alert(device_token, body = "Shutting down.", title = "Lost connection with sensors.", sound = 'chime', category = "WAS_THERE_FIRE")
+        write_state_to_file("cold_off")
+        state_change_time = time.time()
 
 temp_state = TempStateMachine()
  
 class Arduino:
-  """ Gets all sensor data from ardunio and caches it if check_it_now == True. This 
+  """ Gets sensor data from ardunio and caches it if check_it_now == True. This 
   reduces checking time for each individual sensor by 2 sec each"""
 
   def __init__(self):
@@ -114,12 +168,15 @@ class Arduino:
         
         self.last_checked = time.time()
         try:
-            self.json = requests.get("http://192.168.0.36", timeout = 6)
-            print ("Trying to get from arduino and got {0}".format(self.json))
+            self.json = requests.get("http://192.168.0.37", timeout = 6)
+            print ("Trying to get from arduino and got {0}".format(self.json.json()))
+
         except Exception as e:
             print ("Getting from Arduino failed with {0}".format(e))
             self.json = ""
             raise e
+            if KeyboardInterrupt:
+                exit()
         finally:
             return(self.json)
 
@@ -142,18 +199,96 @@ class BBQSensor:
                 print ("Arduino returned value |{0}| which is nan on count {1}".format(self.value, count))
             if math.isnan(self.value) == True:
                 self.value = 1 #TODO --decide what to do here with this 
-        except Exception as e:#(RequestException, Timeout):
+
+        except Exception as e:  #(RequestException, Timeout):
                 #print("Got exception {0}".format(e)) 
                 self.value = 1 #TODO --decide what to do here with this
     
         return(self.value)
 
-  #TODO in future create BBQSensor subclasses: tempsensor, flamesensor to allow for more sensors and comparing capabilities
+    def is_burning(self):
+        pass
+
+class Thermocouple(BBQSensor):
+    def __init__(self, value_name, arduino):
+    # note: value_name must be string (ie "tempf1")
+        self.value_name = value_name
+        self.arduino = arduino
+        self.slope = 1
+
+    # Compare values?
+
+    def get_time_x(self, list_of_time):
+        try:
+            x1 = list_of_time[-3]
+            x2 = list_of_time[-2]
+            x3 = list_of_time[-1]
+            
+        except(IndexError):
+            #TODO raise exception
+            x1 = 1
+            x2 = 1
+            x3 = 1
+        return(x1, x2, x3)
+
+    def get_temp_y(self, list_of_temp):
+        try:
+            y1 = list_of_temp[-3]
+            y2 = list_of_temp[-2]
+            y3 = list_of_temp[-1]
+        except(IndexError):
+            #TODO raise exception
+            y1 = 1
+            y2 = 1
+            y3 = 1
+        return(y1, y2, y3)
+
+    def temp_slope(self, list_of_temp, list_of_time):
+        try:
+            (x1, x2, x3) = self.get_time_x(list_of_time) 
+            (y1, y2, y3) = self.get_temp_y(list_of_temp) 
+            if (x1, x2, x3 == 1): #TODO if exception raised:
+                self.slope = 1
+                return(self.slope)
+            else:
+                self.slope = stats.theilslopes([y1,y2,y3],[x1,x2,x3],0.9) # (ydata,xdata,confidence)
+                #self.slope = ((y2 - y1) / (x2 - x1))   
+            
+            if self.slope > 1 :
+                print('x1:', x1, 'x2:', x2)
+                print('y1:', y1, 'y2:', y2)
+                print("slope:", self.slope)
+
+           
+        except: 
+            self.slope = 1
+        return(self.slope)
+
+    def is_burning(self, list_of_temp, list_of_time):
+        if (self.temp_slope(list_of_temp, list_of_time) > BURNING_SLOPE):
+            print(f'burning slope: {self.slope}')
+            return(True)
+        else:
+            return(False)
+
+
+class FlameSensor(BBQSensor):
+    def __init__(self, value_name, arduino):
+    # note: value_name must be string (ie "tempf1")
+        self.value_name = value_name
+        self.arduino = arduino
+
+    def is_burning(self, flame_value):
+        if flame_value < 1023:
+            return(True)
+        else:
+            return(False)
+ 
 
 arduino = Arduino()
-thermocouple_left = BBQSensor("tempf1", arduino)
-thermocouple_right = BBQSensor("tempf2", arduino)
-flame_sensor = BBQSensor("flameValue", arduino)
+thermocouple_left = Thermocouple("tempf1", arduino)
+thermocouple_right = Thermocouple("tempf2", arduino)
+flame_sensor = FlameSensor("flameValue", arduino)
 
 class BBQSensorSet():
 
@@ -168,6 +303,7 @@ class BBQSensorSet():
         self.is_tempf2_valid = False 
         self.flame_value = 1023
         self.is_flame_valid = True
+        self.combinedTemp = self.tempf1
 
     #def getTemps(self):
     def getLeftTemp(self): 
@@ -189,6 +325,14 @@ class BBQSensorSet():
         #TODO perhaps compare to previous values of itself? 
         else:
             self.is_tempf2_valid = True
+    
+    def compareTemps(self):
+        if self.is_tempf1_valid and self.is_tempf2_valid:
+            if abs(self.tempf1 - self.tempf2) > 200:
+                self.is_tempf1_valid = False
+                self.is_tempf2_valid = False
+            else:
+                self.combinedTemp = (self.tempf1 + self.tempf2)/2
 
     def getFlameValue(self):
         """Gets flame_value and validates"""   
@@ -204,14 +348,6 @@ class BBQSensorSet():
         self.getFlameValue()
 
 bbqSensorSet = BBQSensorSet(thermocouple_left, thermocouple_right, flame_sensor)
-
-def temp_slope(x1,y1,x2,y2):
-    """Determine temperature rate of change -- helps determine if burning"""
-    try:
-      slope = (y2 - y1) / (x2 - x1)   
-      return (slope)
-    except: 
-      return (1)
 
 def is_float(val):
     try:
@@ -257,6 +393,7 @@ def write_dashboard_display_data_to_file(bbqSensorSet, list_of_time = [0], check
         "is_tempf2_valid" : bbqSensorSet.is_tempf2_valid,
         "flameValue": int(bbqSensorSet.flame_value),
         "is_flame_valid" : bbqSensorSet.is_flame_valid,
+        "combined_temp": int(bbqSensorSet.combinedTemp),
         "timeElapsed": str(int(list_of_time[-1])),
         "checkTimer": str(int(check_time_interval - (end_time - timer_start_time))),
         "timeNow": int(time.time()),  
@@ -285,18 +422,6 @@ def write_chart_data_to_file(low_temp_limit, high_temp_limit, list_of_tempf1, li
     with open("unBurntChart.json", "w") as outfile: 
         json.dump(temp_over_time_data, outfile)
 
-#Initialize variables
-list_of_time = [] 
-state_change_time = 0
-list_of_tempf1 = [] # list of temperatures
-list_of_tempf2 = [] # list of temperatures
-burning_slope = 4 #TODO - have system learn what indicates burning from user response (Notification Actions) /flame sensors/ temps
-too_cold_alert_timer = 0
-too_cold_alert_interval = 60
-too_cold_shut_down_time = 200
-too_hot_timer = 0
-too_hot_alert_interval = 30
-
 
 while True:
     (low_temp_limit, high_temp_limit, check_time_interval) = set_cooking_parameters()
@@ -307,6 +432,8 @@ while True:
         write_state_to_file("cold_off") 
         print(temp_state.current_state)
         bbqSensorSet.refresh()
+        bbqSensorSet.compareTemps()
+        print("combined temps", bbqSensorSet.combinedTemp)
         print(bbqSensorSet.tempf1, bbqSensorSet.is_tempf1_valid, bbqSensorSet.tempf2, bbqSensorSet.is_tempf2_valid, bbqSensorSet.flame_value, bbqSensorSet.is_flame_valid)
         write_dashboard_display_data_to_file(bbqSensorSet) #removed last 3 optionals
 
@@ -317,16 +444,11 @@ while True:
         write_chart_data_to_file(low_temp_limit, high_temp_limit, list_of_tempf1, list_of_tempf2, list_of_time)
         #TODO -- change swift code to read in state in 3rd view controller so this will not needed until cooking state
         
-        if (bbqSensorSet.tempf1 or bbqSensorSet.tempf2) > low_temp_limit: 
+        if bbqSensorSet.combinedTemp > low_temp_limit: 
             #TODO also check for state_change_time >10 sec?
-            alert(device_token, body = "Up to {}°F.".format(int(bbqSensorSet.tempf1)), title = "Now we're cooking - TIMER STARTED!", sound = "chime", category = "WAS_THERE_FIRE")
-          
-          # initialize timers and move to cooking state
             total_start_time = time.time()
             timer_start_time = total_start_time
-            write_state_to_file("cooking")
-            state_change_time = time.time()
-            temp_state.intial_warm_up()
+            temp_state.start_cooking()
             continue
           
 #for all states other than cold
@@ -342,13 +464,12 @@ while True:
             list_of_time.append(end_time - total_start_time)  
             list_of_tempf1.append(bbqSensorSet.tempf1) 
             list_of_tempf2.append(bbqSensorSet.tempf2) 
+           # print("combined temps", bbqSensorSet.combinedTemp)
 
             #read sensors & update ios dashboard display data
             bbqSensorSet.refresh()
             if (bbqSensorSet.is_tempf2_valid == False) and (bbqSensorSet.is_tempf1_valid == False):
                 print("temperature sensors offline, shutting down.")
-                # wait 10 seconds 
-                #then turn off
                 temp_state.turn_off() 
                 continue 
 
@@ -358,79 +479,46 @@ while True:
 
     #when in Cooking State: - make state objects to hold behaviour! 
             if temp_state.is_cooking:  #(temp_state.current_state == temp_state.cooking): 
-                if bbqSensorSet.tempf1 < low_temp_limit:
-                    print("low temp limit", low_temp_limit, "tempf1", bbqSensorSet.tempf1)
-                # get state_change_time - compare
-                    too_cold_alert_timer = time.time()  
-                    shut_down_timer = time.time() 
-                    alert(device_token, body = "Cooled down to {}°F.".format(int(bbqSensorSet.tempf1)), title = "Turn UP the BBQ!", sound = 'too_cold.aiff', category = "WAS_THERE_FIRE")
-                    write_state_to_file("cooking_too_cold")
-                    state_change_time = time.time()
+                if bbqSensorSet.combinedTemp < low_temp_limit:
                     temp_state.temp_dropped_too_cold()
-    
-                elif bbqSensorSet.tempf1 > high_temp_limit:
-                # # get state_change_time - compare - compare_
-                    too_hot_timer = time.time()
-                    alert(device_token, body = "It's {}°F.".format(int(bbqSensorSet.tempf1)), title = "Too HOT!", sound = 'too_hot.aiff', category = "WAS_THERE_FIRE")
-                    write_state_to_file("cooking_too_hot")
-                    state_change_time = time.time()
+               
+                elif bbqSensorSet.combinedTemp > high_temp_limit:
                     temp_state.temp_too_hot()
 
-                if (bbqSensorSet.flame_value < 1023 and bbqSensorSet.is_flame_valid == True):                   #TODO - check slope here?? if ((slopeL > burning_slope) or (slopeR > burning_slope) or (bbqSensorSet.flame_value < 1023 and bbqSensorSet.is_flame_valid == True)):
-                    alert(device_token, body = "It's {}°F.".format(int(bbqSensorSet.tempf1)), title = "On FIRE!", sound = 'fire.aiff', category = "WAS_THERE_FIRE")
-                    write_state_to_file("burning")
-                    state_change_time = time.time()
+                if ((flame_sensor.is_burning(bbqSensorSet.flame_value) and bbqSensorSet.is_flame_valid == True) or thermocouple_left.is_burning(list_of_tempf1, list_of_time) or thermocouple_right.is_burning(list_of_tempf2, list_of_time)) :               
+                    print(f'flame value: {bbqSensorSet.flame_value}, is_flame_valid: { bbqSensorSet.is_flame_valid}, thermocouple_left_is_burning: {thermocouple_left.is_burning(list_of_tempf1, list_of_time)}, right_is_burning: {thermocouple_right.is_burning(list_of_tempf2, list_of_time)} ')
                     temp_state.heat_to_burn() 
 
 
             if temp_state.is_cooking_too_cold: #(temp_state.current_state == temp_state.cooking_too_cold):  
-                if (end_time - too_cold_alert_timer) >= too_cold_alert_interval:  
+                if (end_time - too_cold_alert_timer) >= TOO_COLD_ALERT_INTERVAL:  
                     too_cold_alert_timer = time.time() 
                     alert(device_token, body = "Cooled down to {}°F.".format(int(bbqSensorSet.tempf1)), title = "Turn UP the BBQ!", sound = 'too_cold.aiff', category = "WAS_THERE_FIRE")
 
-                elif (end_time - shut_down_timer >= too_cold_shut_down_time):  
-                    alert(device_token, body = "Shutting down.", title = "Enjoy your food!", sound = 'chime', category = "WAS_THERE_FIRE")
-                    temp_state.turn_off() # (Back to cold_off state)  
+                elif ((end_time - too_cold_alert_timer) >= TOO_COLD_SHUT_DOWN_TIME):  
+                   # alert(device_token, body = "Shutting down.", title = "Enjoy your food!", sound = 'chime', category = "WAS_THERE_FIRE")
+                    temp_state.cooled_down_to_turn_off() # (Back to cold_off state)  
 
-                if bbqSensorSet.tempf1 > low_temp_limit:
-                    write_state_to_file("cooking")
-                    state_change_time = time.time()
+                if bbqSensorSet.combinedTemp > low_temp_limit:
                     temp_state.warmed_back_up()
 
                 
             if temp_state.is_cooking_too_hot: #(temp_state.current_state == temp_state.cooking_too_hot):              
-                if end_time - too_hot_timer >= too_hot_alert_interval: 
-                    too_hot_timer = time.time()
+                if (end_time - too_hot_alert_timer) >= TOO_HOT_ALERT_INTERVAL: 
+                    too_hot_alert_timer = time.time()
                     alert(device_token, body = "It's {}°F.".format(int(bbqSensorSet.tempf1)), title = "Too HOT!", sound = 'too_hot.aiff', category = "WAS_THERE_FIRE")
                  
                   # Check temperature slope to determine burning:
                   #TODO replace with check slope function or method 
-                    try:
-                        slopeL = temp_slope(list_of_time[-2], list_of_tempf1[-2], list_of_time[-1], list_of_tempf1[-1])
-                    except(IndexError):
-                        slopeL = 1
 
-                    try:
-                        slopeR = temp_slope(list_of_time[-2], list_of_tempf2[-2], list_of_time[-1], list_of_tempf2[-1])
-                    except(IndexError):
-                        slopeR = 1
-
-                    if ((slopeL > burning_slope) or (slopeR > burning_slope) or (bbqSensorSet.flame_value < 1023 and bbqSensorSet.is_flame_valid == True)):
-                        alert(device_token, body = "It's {}°F.".format(int(bbqSensorSet.tempf1)), title = "On FIRE!", sound = 'fire.aiff', category = "WAS_THERE_FIRE")
-                        write_state_to_file("burning")
-                        state_change_time = time.time()
+                    if ((flame_sensor.is_burning(bbqSensorSet.flame_value) and bbqSensorSet.is_flame_valid == True) or thermocouple_left.is_burning(list_of_tempf1, list_of_time) or thermocouple_left.is_burning(list_of_tempf2,list_of_time)) :                
                         temp_state.too_hot_to_burn() 
                 
-                if bbqSensorSet.tempf1 < high_temp_limit:
-                    write_state_to_file("cooking")
-                    state_change_time = time.time()
+                elif bbqSensorSet.combinedTemp < high_temp_limit:
                     temp_state.cooled_back_down_to_cooking()
 
-
-            if (temp_state.current_state == temp_state.burning):  
-                if bbqSensorSet.tempf1 < high_temp_limit:
-                    write_state_to_file("cooking")
-                    state_change_time = time.time()
+            if temp_state.is_burning: #current_state == temp_state.burning):  
+                if (bbqSensorSet.combinedTemp < high_temp_limit) and (not flame_sensor.is_burning(bbqSensorSet.flame_value)):
                     temp_state.stop_burning() 
 
         except RequestException:

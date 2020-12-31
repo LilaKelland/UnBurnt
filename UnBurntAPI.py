@@ -26,6 +26,7 @@ def getTempTime():
         "is_tempf2_valid" : tempData["is_tempf2_valid"],
         "flameValue": tempData["flameValue"],
         "is_flame_valid" : tempData["is_flame_valid"],
+        "combined_temp" : tempData["combined_temp"],
         "timeElapsed" : tempData["timeElapsed"],
         "checkTimer" : tempData["checkTimer"],
         "timeNow" : tempData["timeNow"],
