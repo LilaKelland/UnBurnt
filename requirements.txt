@@ -1,7 +1,5 @@
-numpy==1.19.1
 apns2_client==0.5.4
 requests==2.23.0
 bottle==0.12.18
 python_statemachine==0.8.0
 statemachine==0.1
-scipy
