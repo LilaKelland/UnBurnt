@@ -28,6 +28,10 @@ import numpy
 from scipy import stats
 import apns2
 import math
+import pymongo
+from pymongo import MongoClient
+from mongoengine import *
+connect('mongoengine_test')
 
 #Initialize variables
 list_of_time = [] 
@@ -40,6 +44,8 @@ TOO_COLD_ALERT_INTERVAL = 60
 TOO_COLD_SHUT_DOWN_TIME = 200
 too_hot_alert_timer = 0
 TOO_HOT_ALERT_INTERVAL = 30
+client = MongoClient()
+db = client.pymongo_test
 
 #TODO --store this in a DB and associate with user id allow for varying number of device token 
 l_device_token = "2a76a367f104574d4f595d240d302a62e069fb144d96b7090392e5606f27da18"
@@ -92,7 +98,7 @@ class TempStateMachine(StateMachine):
     def on_temp_dropped_too_cold(self):
         print("cooking to too cold")
         too_cold_alert_timer = time.time()  
-        shut_down_timer = time.time() 
+        too_cold_shutdown_timer = time.time() 
         alert(device_token, body = "Cooled down to {}°F.".format(int(bbqSensorSet.tempf1)), title = "Turn UP the BBQ!", sound = 'too_cold.aiff', category = "WAS_THERE_FIRE")
         write_state_to_file("cooking_too_cold")
         state_change_time = time.time()
@@ -251,15 +257,13 @@ class Thermocouple(BBQSensor):
                 self.slope = 1
                 return(self.slope)
             else:
-                self.slope = stats.theilslopes([y1,y2,y3],[x1,x2,x3],0.9) # (ydata,xdata,confidence)
-                #self.slope = ((y2 - y1) / (x2 - x1))   
+                self.slope = stats.theilslopes([y1,y2,y3],[x1,x2,x3],0.9) # (ydata,xdata,confidence)  
             
             if self.slope > 1 :
                 print('x1:', x1, 'x2:', x2)
                 print('y1:', y1, 'y2:', y2)
                 print("slope:", self.slope)
 
-           
         except: 
             self.slope = 1
         return(self.slope)
@@ -495,7 +499,7 @@ while True:
                     too_cold_alert_timer = time.time() 
                     alert(device_token, body = "Cooled down to {}°F.".format(int(bbqSensorSet.tempf1)), title = "Turn UP the BBQ!", sound = 'too_cold.aiff', category = "WAS_THERE_FIRE")
 
-                elif ((end_time - too_cold_alert_timer) >= TOO_COLD_SHUT_DOWN_TIME):  
+                elif ((end_time - too_cold_shutdown_timer) >= TOO_COLD_SHUT_DOWN_TIME):  
                    # alert(device_token, body = "Shutting down.", title = "Enjoy your food!", sound = 'chime', category = "WAS_THERE_FIRE")
                     temp_state.cooled_down_to_turn_off() # (Back to cold_off state)  
 
