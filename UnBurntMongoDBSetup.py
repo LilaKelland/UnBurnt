@@ -49,8 +49,8 @@ unBurntChartSetup = {
         "lowTempLimit": 70,
         "highTempLimit": 100,
         "tempCount": 0,
-        "tempOverTime1" : list_of_tempf1,
-        "tempOverTime2" : list_of_tempf2,
-        "timeElapse" : list_of_time
+        "tempOverTime1" : [],
+        "tempOverTime2" : [],
+        "timeElapse" : []
         }
 unBurntChart.insert_one(unBurntChartSetup)
