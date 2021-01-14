@@ -1,1 +1,1 @@
-{"tempf1": 1, "is_tempf1_valid": false, "tempf2": 1, "is_tempf2_valid": false, "flameValue": 1, "is_flame_valid": false, "combined_temp": 3, "timeElapsed": "0", "checkTimer": "0", "timeNow": 1609861226, "timeStamp": "Tuesday 10:40 AM"}
+{"tempf1": 67, "is_tempf1_valid": true, "tempf2": 68, "is_tempf2_valid": true, "flameValue": 1023, "is_flame_valid": true, "combined_temp": 67, "timeElapsed": "304", "checkTimer": "2695", "timeNow": 1610119618, "timeStamp": "Friday 10:26 AM"}

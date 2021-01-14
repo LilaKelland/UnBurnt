@@ -8,71 +8,41 @@
 
 from bottle import Bottle, response, request
 import json
+from bson.json_util import loads
+from bson.json_util import dumps
+from pymongo import MongoClient
+from pprint import pprint
 
+client = MongoClient("mongodb://127.0.0.1:27017/pymongo_test")
+db = client.pymongo_test
 app = Bottle()
 
 @app.route('/getTempTime')
 def getTempTime():
-    """Current temps, time/date, time left to check BBQ, total cook time for ios"""
-   
-    with open('unBurntTemp.json', 'r') as openfile: 
-        tempData = json.load(openfile) 
-        print(tempData)
-
-    tempSensorData = {
-        "tempf1" : tempData["tempf1"],
-        "is_tempf1_valid" : tempData["is_tempf1_valid"],
-        "tempf2": tempData["tempf2"],
-        "is_tempf2_valid" : tempData["is_tempf2_valid"],
-        "flameValue": tempData["flameValue"],
-        "is_flame_valid" : tempData["is_flame_valid"],
-        "combined_temp" : tempData["combined_temp"],
-        "timeElapsed" : tempData["timeElapsed"],
-        "checkTimer" : tempData["checkTimer"],
-        "timeNow" : tempData["timeNow"],
-        "timeStamp" : str(tempData["timeStamp"])
-        }
-
-    return(json.dumps(tempSensorData))
+    """Current temps, time/date, time left to check BBQ, total cook time"""
+    tempSensorData = db.unBurntTemp.find_one({"_id": "unBurntTemp_id"})
+    pprint(tempSensorData)
+    return json.loads(dumps(tempSensorData))
 
 
 @app.route('/getState')
 def getState():
-    """Reads cooking state"""
-   
-    with open('unBurntState.json', 'r') as openfile: 
-        stateData = json.load(openfile) 
-        print(stateData)
-
-    stateStatus = {
-        "state": str(stateData["state"])
-        }
-
-    return(json.dumps(stateStatus))
+    """cooking state"""
+    stateStatus = db.unBurntState.find_one({"_id": "unBurntState_id"})
+    pprint(stateStatus)
+    return json.loads(dumps(stateStatus))
 
 
 @app.route('/getTempTimeArray')
 def getTempTimeArray():
     """Temperature and time lists for the chart view"""
-
-    with open('unBurntChart.json', 'r') as openfile: 
-        TempTimeData = json.load(openfile) 
-
-    tempTimetry = {
-        "highTempLimit": TempTimeData["highTempLimit"],
-        "lowTempLimit": TempTimeData["lowTempLimit"],
-        "tempCount": TempTimeData["tempCount"],
-        "tempArray": TempTimeData["tempOverTime1"],
-        "tempArray2": TempTimeData["tempOverTime2"],
-        "timeArray": TempTimeData["timeElapse"]
-        }
-
-    return(json.dumps(tempTimetry))
+    tempTimetry = db.unBurntChart.find_one({"_id": "unBurntChart_id"})
+    return json.loads(dumps(tempTimetry))
 
 
 @app.route('/setToken')
 def getToken():
-    """# Get token from ios"""
+    """Get token for APNS"""
 
     token = request.GET.get("tokenString")
     setToken(token)
@@ -81,9 +51,10 @@ def setToken(token):
     tokenData = {
           "token": token,
     }
+    db.unBurntToken.insert_one(tokenData)
 
-    with open("token.json", "w") as outfile: 
-        json.dump(tokenData, outfile)
+     # with open("token.json", "w") as outfile: 
+      #  json.dump(tokenData, outfile)
 
 
 @app.route('/cookingParameters')
@@ -95,15 +66,15 @@ def getCookingParameters():
         highTemp = request.GET.get("highTemp")
         checkTime = request.GET.get("checkTime")
         print(lowTemp, highTemp, checkTime)
+        
         cookingParameters = {
             "lowTemp" : lowTemp,
             "highTemp" : highTemp,
             "checkTime" : checkTime
             }
-    
-        with open("unBurntConfig.json", "w") as outfile: 
-            json.dump(cookingParameters, outfile) 
-
+        db.unBurntConfig.update_one(db.unBurntConfig.find_one({"_id": "unBurntConfig_id"}), cookingParameters, upsert=True)
+        """with open("unBurntConfig.json", "w") as outfile: 
+            json.dump(cookingParameters, outfile) """
         return("success")
         
     except:
@@ -116,14 +87,15 @@ def getIsBurning():
 
     try:
         isBurning = request.GET.get("isBurning")
-        print(isBurning)
+        print("isBurning:", isBurning)
         actuallyBurning= {
             "is_burning" : isBurning  
             }
     
         with open("isBurning.json", "w") as outfile: 
             json.dump(actuallyBurning, outfile) 
-
+            db.unBurntIsBurning.insert_one({isburning})
+            #TODO add grab /link other required info for supervised learning 
         return("success")
         
     except:
@@ -133,16 +105,13 @@ def getIsBurning():
 @app.route('/getDefaultConfig')
 def getDefaultConfig():
     """#Retreives cooking parameters from unBurntConfig.json for defaults"""
+    configData = db.unBurntConfig.find_one()
+    pprint(configData)
+    return json.loads(dumps(configData))
 
-    with open("unBurntConfig.json", 'r') as openfile: 
-            configData = json.load(openfile) 
 
-    return(json.dumps(configData))
-
-    
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=8080, debug=True, reloader=True)
-    #app.run(host='192.168.0.19', port=8080, debug=True, reloader=True)
-    #server 192.168.0.35 - but set to 0.0.0.0
-    #computer 192.168.0.19
+    #app.run(host='0.0.0.0', port=8080, debug=True, reloader=True) # run on pi server
+    app.run(host='192.168.0.19', port=8080, debug=True, reloader=True) # run on computer
+
 
