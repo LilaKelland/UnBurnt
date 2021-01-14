@@ -171,10 +171,10 @@ class Arduino:
         self.last_checked = time.time()
         try:
             self.json = requests.get("http://192.168.0.37", timeout = 6)
-            logging.info(f"Trying to get from arduino and got {self.json.json()}") #{0}".format(self.json.json()))
+            logging.info(f"Trying to get from arduino and got {self.json.json()}") 
 
         except Exception as e:
-            logging.warning(f"Getting from Arduino failed with {e}") #{0}".format(e))
+            logging.warning(f"Getting from Arduino failed with {e}") 
             self.json = ""
             raise e
             if KeyboardInterrupt:
