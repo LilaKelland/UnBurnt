@@ -33,7 +33,7 @@ from pymongo import MongoClient
 from pprint import pprint
 import logging
 
-logging.basicConfig(level = logging.INFO)
+logging.basicConfig(level = logging.WARNING)
 
 #Initialize variables
 list_of_time = [] 
@@ -41,11 +41,11 @@ state_change_time = 0
 list_of_tempf1 = [] # list of temperatures
 list_of_tempf2 = [] # list of temperatures
 BURNING_SLOPE = 4 #TODO - have system learn what indicates burning from user response (Notification Actions) /flame sensors/ temps
-too_cold_alert_timer = 0
-TOO_COLD_ALERT_INTERVAL = 60
-TOO_COLD_SHUT_DOWN_TIME = 200
-too_cold_shutdown_timer = 0
-too_hot_alert_timer = 0
+
+TOO_COLD_ALERT_INTERVAL = 2
+TOO_COLD_SHUT_DOWN_TIME = 5
+
+
 TOO_HOT_ALERT_INTERVAL = 30
 
 client = MongoClient("mongodb://127.0.0.1:27017/pymongo_test")
@@ -80,6 +80,11 @@ class TempStateMachine(StateMachine):
     cooking_too_hot = State("Cooking_too_hot")
     cooking_too_cold = State("Cooking_too_cold")
     burning = State('Burning')
+    def __init__(self):
+        super().__init__()
+        self.too_cold_shutdown_timer = 0
+        self.too_cold_alert_timer = 0
+        self.too_hot_alert_timer = 0
 
 #TODO - add in substates for cooking too hot and cooking too cold to make less confusing
     start_cooking = cold_off.to(cooking) #(when first time temp > _limit)
@@ -102,8 +107,8 @@ class TempStateMachine(StateMachine):
        
     def on_temp_dropped_too_cold(self):
         logging.info("cooking to too cold")
-        too_cold_alert_timer = time.time()  
-        too_cold_shutdown_timer = time.time() 
+        self.too_cold_alert_timer = time.time()  
+        self.too_cold_shutdown_timer = time.time() 
         alert(device_token, body = "Cooled down to {}°F.".format(int(bbqSensorSet.tempf1)), title = "Turn UP the BBQ!", sound = 'too_cold.aiff', category = "WAS_THERE_FIRE")
         write_state_to_db("cooking_too_cold")
 
@@ -113,7 +118,7 @@ class TempStateMachine(StateMachine):
 
     def on_temp_too_hot(self):
         logging.info("cooking.to(cooking_too_hot)")
-        too_hot_alert_timer = time.time()
+        self.too_hot_alert_timer = time.time()
         alert(device_token, body = "It's {}°F.".format(int(bbqSensorSet.tempf1)), title = "Too HOT!", sound = 'too_hot.aiff', category = "WAS_THERE_FIRE")
         write_state_to_db("cooking_too_hot")
 
@@ -170,8 +175,9 @@ class Arduino:
         
         self.last_checked = time.time()
         try:
-            self.json = requests.get("http://192.168.0.37", timeout = 6)
-            logging.info(f"Trying to get from arduino and got {self.json.json()}") 
+
+            self.json = requests.get('http://192.168.4.29:8080/fakeArduino') #("http://192.168.4.28", timeout = 6)#("http://192.168.0.37", timeout = 6)
+            logging.debug(f"Trying to get from arduino and got {self.json.json()}") 
 
         except Exception as e:
             logging.warning(f"Getting from Arduino failed with {e}") 
@@ -293,7 +299,6 @@ flame_sensor = FlameSensor("flameValue", arduino)
 class BBQSensorSet():
 
     def __init__(self, left, right, flame):
-        #TODO --use subclass for temp_sensor_set = {}/flame_sensor_set = {} each in future to make more generatic/ flexible have methods validatesensor, addSensor...
         self.left_temp = left
         self.right_temp = right
         self.flame_sensor = flame
@@ -310,7 +315,6 @@ class BBQSensorSet():
         self.tempf1 = self.left_temp.get_value()
         if (self.tempf1 == 1 or self.tempf1 == 32):
             self.is_tempf1_valid = False  # to deal with flakiness of sensors
-        #TODO --elif (temp1 < (temp2 + 200)) or (temp1 > (temp2 - 200)):
         #TODO --perhaps compare to previous values of itself? 
         else:
             self.is_tempf1_valid = True
@@ -320,7 +324,6 @@ class BBQSensorSet():
         self.tempf2 = self.right_temp.get_value()
         if (self.tempf2 == 1 or self.tempf2 == 32):
             self.is_tempf2_valid = False  
-        #TODO elif (temp1 < (temp2 + 200)) or (temp1 > (temp2 - 200)):
         #TODO perhaps compare to previous values of itself? 
         else:
             self.is_tempf2_valid = True
@@ -344,6 +347,7 @@ class BBQSensorSet():
     def refresh(self):
         self.getLeftTemp()
         self.getRightTemp()
+        self.compareTemps()
         self.getFlameValue()
 
 bbqSensorSet = BBQSensorSet(thermocouple_left, thermocouple_right, flame_sensor)
@@ -354,7 +358,6 @@ def is_float(val):
     except ValueError:
         return(False)
     return(True)
-
 
 def set_cooking_parameters():
     """Read in cooking limits as set by ios app """
@@ -386,8 +389,6 @@ def write_dashboard_display_data_to_db(bbqSensorSet, list_of_time = [0], check_t
         end_time = time.time()
     now = datetime.datetime.now()
     #TODO handle the empty array case - special character?
-    #TODO initialize the check time
-   
 
     db.unBurntTemp.update_one({"_id": "unBurntTemp_id"}, {"$set":{
         "tempf1": int(bbqSensorSet.tempf1),
@@ -410,6 +411,7 @@ def write_state_to_db(state_status):
 
 def write_chart_data_to_db(low_temp_limit, high_temp_limit, list_of_tempf1, list_of_tempf2, list_of_time):
     temp_count = len(list_of_tempf1)
+    
     db.unBurntChart.update_one({"_id": "unBurntChart_id"}, {"$set":{
         "lowTempLimit": low_temp_limit,
         "highTempLimit": high_temp_limit,
@@ -432,8 +434,22 @@ while True:
         bbqSensorSet.refresh()
         bbqSensorSet.compareTemps()
         logging.info(f'combined temps  {bbqSensorSet.combinedTemp}')
-        logging.info(f'{bbqSensorSet.tempf1}, {bbqSensorSet.is_tempf1_valid}, {bbqSensorSet.tempf2}, {bbqSensorSet.is_tempf2_valid}, {bbqSensorSet.flame_value}, {bbqSensorSet.is_flame_valid}')
-        write_dashboard_display_data_to_db(bbqSensorSet) 
+        logging.debug(f'{bbqSensorSet.tempf1}, {bbqSensorSet.is_tempf1_valid}, {bbqSensorSet.tempf2}, {bbqSensorSet.is_tempf2_valid}, {bbqSensorSet.flame_value}, {bbqSensorSet.is_flame_valid}')
+        write_dashboard_display_data_to_db(bbqSensorSet)#, list_of_time = [0], check_time_interval = 0) 
+        """db.unBurntTemp.update_one({"_id": "unBurntTemp_id"}, {"$set":{
+            "tempf1": int(bbqSensorSet.tempf1),
+            "is_tempf1_valid" : bbqSensorSet.is_tempf1_valid,
+            "tempf2": int(bbqSensorSet.tempf2),
+            "is_tempf2_valid" : bbqSensorSet.is_tempf2_valid,
+            "flameValue": int(bbqSensorSet.flame_value),
+            "is_flame_valid" : bbqSensorSet.is_flame_valid,
+            "combined_temp": int(bbqSensorSet.combinedTemp),
+            "timeElapsed": str(0),
+            "checkTimer": str(0),
+            "timeNow": int(time.time()),  
+            "timeStamp": datetime.datetime.now().strftime("%A %I:%M %p")
+         #now = datetime.datetime.now()
+            }})"""
 
         #reset/ initialize chart data
         list_of_time = [] 
@@ -486,13 +502,14 @@ while True:
                     logging.info(f'flame value: {bbqSensorSet.flame_value}, is_flame_valid: { bbqSensorSet.is_flame_valid}, thermocouple_left_is_burning: {thermocouple_left.is_burning(list_of_tempf1, list_of_time)}, right_is_burning: {thermocouple_right.is_burning(list_of_tempf2, list_of_time)} ')
                     temp_state.heat_to_burn() 
 
-    #when in Cooking_too_cold state
+    #when in cooking_too_cold state
             if temp_state.is_cooking_too_cold: 
-                if (end_time - too_cold_alert_timer) >= TOO_COLD_ALERT_INTERVAL:  
-                    too_cold_alert_timer = time.time() 
+
+                if (end_time - temp_state.too_cold_alert_timer) >= TOO_COLD_ALERT_INTERVAL:  
+                    temp_state.too_cold_alert_timer = time.time() 
                     alert(device_token, body = "Cooled down to {}°F.".format(int(bbqSensorSet.tempf1)), title = "Turn UP the BBQ!", sound = 'too_cold.aiff', category = "WAS_THERE_FIRE")
 
-                elif ((end_time - too_cold_shutdown_timer) >= TOO_COLD_SHUT_DOWN_TIME):  
+                elif ((end_time - temp_state.too_cold_shutdown_timer) >= TOO_COLD_SHUT_DOWN_TIME):  
                     temp_state.cooled_down_to_turn_off()  
 
                 if bbqSensorSet.combinedTemp > low_temp_limit:
@@ -500,8 +517,8 @@ while True:
 
     #when in cooking_too_hot state            
             if temp_state.is_cooking_too_hot:              
-                if (end_time - too_hot_alert_timer) >= TOO_HOT_ALERT_INTERVAL: 
-                    too_hot_alert_timer = time.time()
+                if (end_time - temp_state.too_hot_alert_timer) >= TOO_HOT_ALERT_INTERVAL: 
+                    temp_state.too_hot_alert_timer = time.time()
                     alert(device_token, body = "It's {}°F.".format(int(bbqSensorSet.tempf1)), title = "Too HOT!", sound = 'too_hot.aiff', category = "WAS_THERE_FIRE")
 
                     if ((flame_sensor.is_burning(bbqSensorSet.flame_value) and bbqSensorSet.is_flame_valid == True) or thermocouple_left.is_burning(list_of_tempf1, list_of_time) or thermocouple_left.is_burning(list_of_tempf2,list_of_time)) :                
