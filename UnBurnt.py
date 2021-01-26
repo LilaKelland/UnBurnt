@@ -436,20 +436,6 @@ while True:
         logging.info(f'combined temps  {bbqSensorSet.combinedTemp}')
         logging.debug(f'{bbqSensorSet.tempf1}, {bbqSensorSet.is_tempf1_valid}, {bbqSensorSet.tempf2}, {bbqSensorSet.is_tempf2_valid}, {bbqSensorSet.flame_value}, {bbqSensorSet.is_flame_valid}')
         write_dashboard_display_data_to_db(bbqSensorSet)#, list_of_time = [0], check_time_interval = 0) 
-        """db.unBurntTemp.update_one({"_id": "unBurntTemp_id"}, {"$set":{
-            "tempf1": int(bbqSensorSet.tempf1),
-            "is_tempf1_valid" : bbqSensorSet.is_tempf1_valid,
-            "tempf2": int(bbqSensorSet.tempf2),
-            "is_tempf2_valid" : bbqSensorSet.is_tempf2_valid,
-            "flameValue": int(bbqSensorSet.flame_value),
-            "is_flame_valid" : bbqSensorSet.is_flame_valid,
-            "combined_temp": int(bbqSensorSet.combinedTemp),
-            "timeElapsed": str(0),
-            "checkTimer": str(0),
-            "timeNow": int(time.time()),  
-            "timeStamp": datetime.datetime.now().strftime("%A %I:%M %p")
-         #now = datetime.datetime.now()
-            }})"""
 
         #reset/ initialize chart data
         list_of_time = [] 
