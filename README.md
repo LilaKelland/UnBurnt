@@ -1,13 +1,13 @@
 # UnBurnt
 
-Still a work in progress.
+Still a work in progress. 
 
 After having too many dinners go from "just a couple more minutes" to completely burnt on the BBQ, an ios app that alerts to temperature fluctuations and cooking times when BBQing was born.
 
 See UnBurntApp repository for xcode files.
 See UnBurntArduino repository for Arduino set up.
 
-UnBurnt.py and UnBurntAPI.py run on a raspberry pi server.
+Deployed on a raspberry pi server via Docker.
 
 The python code reads in sensor data (in this case are attached to an ardunio Nano with wifi), and using push notifications:
 -  Alerts user when the BBQ has warmed up to a user-defined minimum cooking temerature 
