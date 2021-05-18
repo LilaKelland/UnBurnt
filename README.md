@@ -17,7 +17,6 @@ The python code reads in sensor data (in this case are attached to an ardunio Na
 ## Next Steps:
 
 - refactoring the giant while loop in UnBurnt.py- break out into smaller functions 
-- add a database in order to:
 - add in machine learning with notifications with action from user (once get it to work properly) and the temperature slope data and flame sensor
 - add user ids - to store device tokens to allow for more systems
 
