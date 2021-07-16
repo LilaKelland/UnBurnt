@@ -1,7 +1,13 @@
 apns2_client==0.5.4
 requests==2.23.0
-bottle==0.12.18
-python_statemachine==0.8.0
-statemachine==0.1
-pymongo
-mongoengine
+# bottle==0.12.18
+# python-statemachine==0.8.0
+# statemachine==0.1
+
+Flask==1.1.2
+Flask-RESTful
+Flask-SQLAlchemy
+numpy
+scipy
+# uwsgi
+psycopg2
